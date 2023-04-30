@@ -69,7 +69,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Route to get user profile information
 router.get('/profile/:id', authMiddleWare, async (req, res) => {
   try {
     const userId = req.params.id;
@@ -100,6 +99,78 @@ router.get('/cart/:id', authMiddleWare, async (req, res) => {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
-})
+});
+
+router.patch('/cart/add/:productId', authMiddleWare, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const productId = req.params.productId;
+    const quantity = 1;
+
+    const user = await User.findById(userId).populate('cart.product');
+
+    const existingProductIndex = user.cart.findIndex(item => item.product._id.toString() === productId);
+
+    if (existingProductIndex !== -1) {
+      user.cart[existingProductIndex].quantity += quantity;
+    } else {
+      user.cart.push({ product: productId, quantity });
+    }
+
+    await user.save();
+    res.status(200).json({ message: 'Product added to cart' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.patch('/cart/remove/:productId', authMiddleWare, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const productId = req.params.productId;
+    const quantity = 1;
+
+    const user = await User.findById(userId).populate('cart.product');
+
+    const existingProductIndex = user.cart.findIndex(item => item.product._id.toString() === productId);
+
+    if (existingProductIndex !== -1) {
+      if (user.cart[existingProductIndex].quantity > 1) {
+        user.cart[existingProductIndex].quantity -= quantity;
+      }
+    }
+
+    await user.save();
+    res.status(200).json(user.cart);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.delete('/cart/:productId', authMiddleWare, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const productId = req.params.productId;
+
+    const user = await User.findById(userId).populate('cart.product');
+
+    // Check if the product exists in the user's cart
+    const cartItem = user.cart.find(item => item.product.id === productId);
+    if (!cartItem) {
+      return res.status(404).json({ message: 'Product not found in cart' });
+    }
+
+    // Remove the product from the user's cart
+    user.cart.pull({ _id: cartItem._id });
+    await user.save();
+
+    res.status(200).json({ message: 'Product removed from cart' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 module.exports = router;
