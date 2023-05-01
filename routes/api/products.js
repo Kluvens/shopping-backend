@@ -47,8 +47,6 @@ router.get('/',async (req, res) => {
       .limit(limit)
       .populate('category');
 
-    console.log(products);
-
     const nextPage = pageNum < totalPages ? '${req.baseUrl}?orderby=${orderby}&pagenum=${pageNum + 1}&search=${search}' : null;
     const prevPage = pageNum > 1 ? '${req.baseUrl}?orderby=${orderby}&pagenum=${pageNum - 1}&search=${search}' : null;
 

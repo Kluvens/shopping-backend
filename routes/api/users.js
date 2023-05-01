@@ -26,7 +26,7 @@ router.post('/register', async(req, res) => {
 
     // create a new user
     const newUser = new User({
-      name,
+      userName: name,
       email,
       password: hashedPassword,
     });
@@ -38,7 +38,7 @@ router.post('/register', async(req, res) => {
     const token = jwt.sign({ userId: newUser._id }, 'RANDOM_TOKEN_SECRET');
 
     // return the token to the client
-    res.status(201).json({ token });
+    res.status(201).json({ token, userId: newUser._id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -51,9 +51,9 @@ router.post('/login', async (req, res) => {
 
   try {
     const user = await User.findOne({ email: userEmail });
-    if (!user) {
+    if (user === null) {
       res.status(401).json({ message: 'Invalid email or password' });
-    } 
+    }
 
     const passwordMatch = await bcrypt.compare(userPassword, user.password);
     if (!passwordMatch) {
@@ -61,7 +61,8 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user._id }, 'RANDOM_TOKEN_SECRET');
-    res.status(200).json({ token: token });
+    console.log(user);
+    res.status(200).json({ token, userId: user._id });
 
   } catch (err) {
     console.error(err);
