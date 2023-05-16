@@ -17,6 +17,10 @@ const ProductSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  image: {
+    type: String,
+    required: true
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -25,6 +29,6 @@ const ProductSchema = new mongoose.Schema({
     type: Number,
     default: 0
   }
-})
+});
 
 module.exports = Product = mongoose.model('Product', ProductSchema);

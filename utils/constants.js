@@ -1,3 +1,3 @@
 module.exports = {
-    PAGE_SIZE: 20,
+    PAGE_SIZE: 24,
 };

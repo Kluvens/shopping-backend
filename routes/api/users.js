@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
 const authMiddleWare = require('../../middleware/Auth');
+const fs = require('fs');
+const Product = require('../../models/Product');
 
 router.post('/register', async(req, res) => {
   try {
@@ -61,7 +63,6 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user._id }, 'RANDOM_TOKEN_SECRET');
-    console.log(user);
     res.status(200).json({ token, userId: user._id });
 
   } catch (err) {
@@ -70,48 +71,93 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.get('/profile/:id', authMiddleWare, async (req, res) => {
+router.get('/profile/:id', async (req, res) => {
   try {
     const userId = req.params.id;
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).populate('cart.product');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     const { userName, email, firstName, lastName, phoneNumber, address, favourites, cart, createdAt } = user;
-    res.status(200).json({ userName, email, firstName, lastName, phoneNumber, address, favourites, cart, createdAt });
+    let cartWithBuffer = [];
+    for (const item of cart) {
+      const imagePath = item.product.image;
+      const buffer = await fs.promises.readFile(imagePath);
+      const productWithBuffer = {
+        ...item.product.toObject(),
+        imageBuffer: buffer
+      };
+      const itemWithBuffer = {
+        ...item.toObject(),
+        product: productWithBuffer
+      };
+      cartWithBuffer.push(itemWithBuffer);
+    }
+
+    // let favouritesWithBuffer = [];
+    // for (const item of favourites) {
+    //   const imagePath = item.product.image;
+    //   const buffer = await fs.promises.readFile(imagePath);
+    //   const productWithBuffer = {
+    //     ...item.product.toObject(),
+    //     imageBuffer: buffer
+    //   };
+    //   const itemWithBuffer = {
+    //     ...item.toObject(),
+    //     product: productWithBuffer
+    //   };
+    //   favouritesWithBuffer.push(itemWithBuffer);
+    // }
+    res.status(200).json({ userName, email, firstName, lastName, phoneNumber, address, favourites, cart: cartWithBuffer, createdAt });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-router.get('/cart/:id', authMiddleWare, async (req, res) => {
+router.get('/cart/:id', async (req, res) => {
   try {
     const userId = req.params.id;
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).populate('cart.product');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    const cart = user.cart;
-    return res.status(200).json({ cart });
+    let cart = user.cart;
+    let cartWithBuffer = [];
+    for (const item of cart) {
+      const imagePath = item.product.image;
+      const buffer = await fs.promises.readFile(imagePath);
+      const productWithBuffer = {
+        ...item.product.toObject(),
+        imageBuffer: buffer
+      };
+      const itemWithBuffer = {
+        ...item.toObject(),
+        product: productWithBuffer
+      };
+      cartWithBuffer.push(itemWithBuffer);
+    }
+    return res.status(200).json({ cart: cartWithBuffer });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-router.patch('/cart/add/:productId', authMiddleWare, async (req, res) => {
+router.patch('/cart/add/:productId', async (req, res) => {
   try {
-    const userId = req.user._id;
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, 'RANDOM_TOKEN_SECRET');
+    const userId = decoded.userId;
     const productId = req.params.productId;
     const quantity = 1;
 
     const user = await User.findById(userId).populate('cart.product');
 
-    const existingProductIndex = user.cart.findIndex(item => item.product._id.toString() === productId);
-
+    const existingProductIndex = user.cart.findIndex(item => item._id.toString() === productId);
+    
     if (existingProductIndex !== -1) {
       user.cart[existingProductIndex].quantity += quantity;
     } else {
@@ -126,15 +172,17 @@ router.patch('/cart/add/:productId', authMiddleWare, async (req, res) => {
   }
 });
 
-router.patch('/cart/remove/:productId', authMiddleWare, async (req, res) => {
+router.patch('/cart/remove/:productId', async (req, res) => {
   try {
-    const userId = req.user._id;
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, 'RANDOM_TOKEN_SECRET');
+    const userId = decoded.userId;
     const productId = req.params.productId;
     const quantity = 1;
 
     const user = await User.findById(userId).populate('cart.product');
 
-    const existingProductIndex = user.cart.findIndex(item => item.product._id.toString() === productId);
+    const existingProductIndex = user.cart.findIndex(item => item._id.toString() === productId);
 
     if (existingProductIndex !== -1) {
       if (user.cart[existingProductIndex].quantity > 1) {
@@ -144,6 +192,33 @@ router.patch('/cart/remove/:productId', authMiddleWare, async (req, res) => {
 
     await user.save();
     res.status(200).json(user.cart);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.patch('/cart/delete/:productId', async (req, res) => {
+  try {
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, 'RANDOM_TOKEN_SECRET');
+    const userId = decoded.userId;
+    const productId = req.params.productId;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const cartItemIndex = user.cart.findIndex(item => item._id.toString() === productId);
+    if (cartItemIndex === -1) {
+      return res.status(404).json({ message: 'Product not found in cart' });
+    }
+
+    user.cart.pull(user.cart[cartItemIndex]);
+    await user.save();
+
+    return res.status(200).json({ message: 'Product removed from cart' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -168,6 +243,58 @@ router.delete('/cart/:productId', authMiddleWare, async (req, res) => {
     await user.save();
 
     res.status(200).json({ message: 'Product removed from cart' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.patch('/favourites/add/:productId', async (req, res) => {
+  try {
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, 'RANDOM_TOKEN_SECRET');
+    const userId = decoded.userId;
+    const productId = req.params.productId;
+
+    const product = await Product.findById(productId);
+    const user = await User.findById(userId).populate('favourites.product');
+
+    const existingProductIndex = user.favourites.findIndex(item => item._id.toString() === productId);
+    
+    if (existingProductIndex === -1) {
+      product.favoritesCount++;
+      user.favourites.push(productId);
+    }
+
+    await product.save();
+    await user.save();
+    res.status(200).json({ message: 'Product added to Favourites' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.patch('/favourites/remove/:productId', async (req, res) => {
+  try {
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, 'RANDOM_TOKEN_SECRET');
+    const userId = decoded.userId;
+    const productId = req.params.productId;
+
+    const product = await Product.findById(productId);
+    const user = await User.findById(userId).populate('favourites.product');
+
+    const existingProductIndex = user.favourites.findIndex(item => item._id.toString() === productId);
+    
+    if (existingProductIndex !== -1) {
+      product.favoritesCount--;
+      user.favourites = user.favourites.filter((item) => !item.equals(productId));
+    }
+
+    await product.save();
+    await user.save();
+    res.status(200).json({ message: 'Product added to Favourites' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
