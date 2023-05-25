@@ -37,7 +37,7 @@ router.get('/',async (req, res) => {
         sortby = { createdAt: -1 };
         break;
       case 'favourites':
-        sortby = { favouritesCount: -1 };
+        sortby = { favoritesCount: -1 };
         break;
       case 'random':
       default:
@@ -162,6 +162,12 @@ router.get('/:id', async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
+    const imagePath = product.image;
+    const buffer = await fs.promises.readFile(imagePath);
+    const productWithBuffer = {
+      ...product.toObject(),
+      imageBuffer: buffer
+    };
 
     const user = await User.findById(userId);
     if (!user) {
@@ -170,7 +176,7 @@ router.get('/:id', async (req, res) => {
 
     const isProductInFavorites = user.favourites.some((favoriteProduct) => favoriteProduct.equals(productId));
 
-    res.status(200).json({ product, isFavourite: isProductInFavorites });
+    res.status(200).json({ product: productWithBuffer, isFavourite: isProductInFavorites });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server Error' });

@@ -74,7 +74,7 @@ router.post('/login', async (req, res) => {
 router.get('/profile/:id', async (req, res) => {
   try {
     const userId = req.params.id;
-    const user = await User.findById(userId).populate('cart.product');
+    const user = await User.findById(userId).populate('cart.product').populate('favourites');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -96,21 +96,17 @@ router.get('/profile/:id', async (req, res) => {
       cartWithBuffer.push(itemWithBuffer);
     }
 
-    // let favouritesWithBuffer = [];
-    // for (const item of favourites) {
-    //   const imagePath = item.product.image;
-    //   const buffer = await fs.promises.readFile(imagePath);
-    //   const productWithBuffer = {
-    //     ...item.product.toObject(),
-    //     imageBuffer: buffer
-    //   };
-    //   const itemWithBuffer = {
-    //     ...item.toObject(),
-    //     product: productWithBuffer
-    //   };
-    //   favouritesWithBuffer.push(itemWithBuffer);
-    // }
-    res.status(200).json({ userName, email, firstName, lastName, phoneNumber, address, favourites, cart: cartWithBuffer, createdAt });
+    let favouritesWithBuffer = [];
+    for (const item of favourites) {
+      const imagePath = item.image;
+      const buffer = await fs.promises.readFile(imagePath);
+      const productWithBuffer = {
+        ...item.toObject(),
+        imageBuffer: buffer
+      };
+      favouritesWithBuffer.push(productWithBuffer);
+    }
+    res.status(200).json({ userName, email, firstName, lastName, phoneNumber, address, favourites: favouritesWithBuffer, cart: cartWithBuffer, createdAt });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
